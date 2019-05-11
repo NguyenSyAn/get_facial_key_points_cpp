@@ -8,7 +8,7 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/highgui/highgui.hpp>
 
-std::vector<int> get_facial_points(cv::Mat image){
+std::vector<int> get_facial_points(cv::Mat image, keras2cpp::Model *pointer_model){
     std::vector<float> flat;
 
     for (int i = 0; i < image.rows; i++){
@@ -20,12 +20,10 @@ std::vector<int> get_facial_points(cv::Mat image){
 
     keras2cpp::Tensor in{96, 96, 1};
 
-    // Initialize model
-    auto model = keras2cpp::Model::load("../example.model");
     in.data_ = flat;
 
     // Run prediction.
-    keras2cpp::Tensor out = model(in);
+    keras2cpp::Tensor out = (*pointer_model)(in);
     // out.print();
 
     std::vector<int> facial_points;
@@ -50,20 +48,31 @@ int main() {
         return -1;
     }
 
-    cv::resize(image, image, cv::Size(96, 96)); // The input image must be 96*96
-    std::vector<int> facial_points = get_facial_points(image);  // using trained model to detect all points
+    // ==========================================================================================
+    //  LOAD MODEL AND GET RESULT HERE
+    keras2cpp::Model model = keras2cpp::Model::load("../example.model");    // Initialize model
+    keras2cpp::Model *pointer_model = &model;   // Because the model can not be coppied, so we use the pointer to pass to function
+
+    cv::resize(image, image, cv::Size(96, 96));                                 // The input image must be 96*96
+    std::vector<int> facial_points = get_facial_points(image, pointer_model);   // using trained model to detect all points
+    // ==========================================================================================
+
+    int ratio = 5;
     cv::cvtColor(image, image, CV_GRAY2RGB);    // Convert to RGB color image
+    cv::resize(image, image, cv::Size(96*ratio, 96*ratio));
 
     // Draw all facial points on image
     int num_points = facial_points.size()/2;
     for(int i=0; i<num_points; i++){
-        int x = facial_points[i*2];
-        int y = facial_points[i*2+1];
-        cv::Point p1 = cv::Point(x, y);
-        cv::circle(image, p1, 1, cv::Scalar(0, 255, 0), 1, 8, 0);
-    }
+        int x = facial_points[i*2] * ratio;
+        int y = facial_points[i*2+1] * ratio;
 
-    cv::resize(image, image, cv::Size(500, 500));
+        std::cout << "point " << i << " at " << x << " " << y << std::endl;
+
+        cv::Point p1 = cv::Point(x, y);
+        cv::circle(image, p1, 1, cv::Scalar(0, 0, 255), 3, 8, 0);
+        cv::putText(image, std::to_string(i), p1, cv::FONT_HERSHEY_PLAIN, 1, cv::Scalar(0, 255, 0), 1, 8, false);
+    }
 
     cv::namedWindow( "Display window", cv::WINDOW_AUTOSIZE );// Create a window for display.
     cv::imshow( "Display window", image );                   // Show our image inside it.
